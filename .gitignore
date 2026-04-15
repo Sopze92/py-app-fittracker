@@ -1,0 +1,9 @@
+.vscode
+__pycache__
+
+*.lnk
+*.pdn
+content/*.fti
+runtime/recents.ini
+
+!example.fti
