@@ -2,6 +2,8 @@ from tkinter import *
 from tkinter import ttk
 from datetime import date as Date
 
+from runtime import globals as _G
+
 class UI_TableEntry(object):
   sets: Label
   reps: Label
@@ -52,7 +54,7 @@ class Exercise(object):
 class RoutineData(object):
 
   name: str
-  date: Date
+  date: tuple[Date]
   completed: bool
   days: int
   sets: int
@@ -62,7 +64,7 @@ class RoutineData(object):
   unlocked: bool
   edit: bool
 
-  def __init__(self, name:str, date:Date, completed:bool, days:int, sets:int, exercises:tuple[Exercise]):
+  def __init__(self, name:str, date:tuple[Date], completed:bool, days:int, sets:int, exercises:tuple[Exercise]):
     self.sets_max= max(e.sets for e in exercises)
     self.unlocked= not completed
     self.edit= False
@@ -94,7 +96,7 @@ class Routine(object):
       d.completed= True
       d.unlocked= False
 
-    self.save_file()
+    self.update_file()
     self.ui_refresh()
 
   def unlock_sets(self):
@@ -105,7 +107,7 @@ class Routine(object):
 
     self.ui_refresh()
 
-  def save_file(self):
+  def update_file(self):
     try:
 
       lines= []
@@ -116,6 +118,7 @@ class Routine(object):
         l0= lines[0].replace('\r','').replace('\n','').split(";")
         if d.completed:
           t= Date.today()
+          d.date= (d.date[0], t)
           l0[2]= f"{t.day}.{t.month}.{t.year}"
         l0[3]= str(d.days)
         l0[4]= "0" if d.completed else str(d.sets)
@@ -125,22 +128,50 @@ class Routine(object):
         f.writelines(lines)
 
     except:
-      print("unable to save file")
+      print("unable to update file")
+
+  def save_file(self, filename=""):
+    _filename= filename if filename != "" else self.filename
+    if _filename:
+      try:
+
+        d= self.data
+
+        with open(_filename, "wt", encoding="utf-8") as f:
+          
+          date_a= f"{d.date[0].day}.{d.date[0].month}.{d.date[0].year}"
+          date_b= f"{d.date[1].day}.{d.date[1].month}.{d.date[1].year}"
+
+          lines= [f"{d.name};{date_a};{date_b};{d.days};{d.sets}\n",]
+          
+          for e in d.exercises:
+            lines.append(f"{e.sets};{e.reps};{e.name}\n")
+
+          f.writelines(lines)
+
+        self.filename= _filename
+      except:
+        print("unable to save file")
 
   def toggle_edit(self):
     d= self.data
     d.edit= not d.edit
     self.build()
    
-  def build(self, frame, font) -> tuple[Frame, Button, int, int]:
+  def build(self, frame) -> tuple[Frame, Button, int, int]:
+
+    app= _G.APP_INSTANCE
+    sb= app.statusbar
 
     d= self.data
+
+    fonts= app.font_default
 
     # header
     gframe= ttk.Frame(frame, padding=(2, 2, 2, 2))
 
-    be= ttk.Button(gframe, text="edit")
-    be.place(relx=0, rely=0, x=-2, y=0, width=32, height=24, anchor=NW)
+    be= self.__button__(gframe, sb, "Routine.Edit.TButton", "Toggle routine edit mode", self.toggle_edit)
+    be.place(relx=0, rely=0, y=12, width=24, height=24, anchor=NW)
     self.ui.btn_edit= be
 
     if d.edit:
@@ -148,11 +179,11 @@ class Routine(object):
       _e.insert(0, d.name)
       _e.place(relx=0.5, rely=0, y=4, anchor = CENTER)
     else:
-      l= ttk.Label(gframe, text=d.name)
+      l= ttk.Label(gframe, text=d.name, font=fonts.bold)
       l.place(relx=0.5, rely=0, y=4, anchor = CENTER)
       #l.bind("<Double-1>", lambda e:self.edit_element(LABEL_TITLE))
 
-    ttk.Label(gframe, text=d.date).place(relx=0.5, rely=0, y=24, anchor = CENTER)
+    ttk.Label(gframe, text=d.date[0]).place(relx=0.5, rely=0, y=24, anchor = CENTER)
 
     # days
     ttk.Label(gframe, textvariable=self.ui.label_days).place(relx=1.0, rely=0, x=0, y=24, anchor=E)
@@ -162,9 +193,9 @@ class Routine(object):
 
     # table header
     thframe= ttk.Frame(tframe, relief="groove", padding=(8,2,8,2))
-    ttk.Label(thframe, text="sets").place(relx=0, rely=0, x=0, anchor=NW)
-    ttk.Label(thframe, text="reps").place(relx=0, rely=0, x=60, anchor=N)
-    ttk.Label(thframe, text="name").place(relx=1.0, rely=0, x=0, anchor=NE)
+    ttk.Label(thframe, text="sets", font=fonts.bold).place(relx=0, rely=0, x=-4, anchor=NW)
+    ttk.Label(thframe, text="reps", font=fonts.bold).place(relx=0, rely=0, x=60, anchor=N)
+    ttk.Label(thframe, text="name", font=fonts.bold).place(relx=1.0, rely=0, x=2, anchor=NE)
     thframe.place(relx=0, rely=0, relwidth=1.0, height=24)
     
     # table content
@@ -203,25 +234,31 @@ class Routine(object):
     tframe.place(relx=0.5, rely=0, x=0, y=38, relwidth=1.0, height= h_table+28, anchor=N)
 
     # day done / reps
-    ttk.Label(gframe, textvariable=self.ui.label_done).place(relx=1.0, rely=0, x=-64, y=h_table+78, anchor=E)
+    ttk.Label(gframe, textvariable=self.ui.label_done).place(relx=0.5, rely=0, x=0, y=h_table+78, anchor=CENTER)
     ttk.Label(gframe, textvariable=self.ui.label_reps).place(relx=1.0, rely=0, x=-28, y=h_table+78, anchor=E)
 
-    bi= ttk.Button(gframe, text="+", command=self.increment_sets)
-    bi.place(relx=1.0, rely=0, x=2, y=h_table+78, width=24, height=24, anchor=E)
+    bi= self.__button__(gframe, sb, "Routine.Increment.TButton", "Increment sets count", self.increment_sets)
+    bi.place(relx=1.0, rely=0, y=h_table+78, width=24, height=24, anchor=E)
     self.ui.btn_increment= bi
 
-    bu= ttk.Button(gframe, text="unlock", command=self.unlock_sets)
-    bu.place(relx=0, rely=0, x=-2, y=h_table+78, width=50, height=24, anchor=W)
+    bu= self.__button__(gframe, sb, "Routine.Unlock.TButton", "Unlock further progress", self.unlock_sets)
+    bu.place(relx=0, rely=0, y=h_table+78, width=24, height=24, anchor=W)
     self.ui.btn_unlock= bu
 
     gframe.pack(fill="both", expand=True)
 
-    ww= max(font.measure(lun) + 24 + 90, 240)
-    wh= h_table + 100
+    ww= max(fonts.default.measure(lun) + 24 + 90, 240)
+    wh= h_table + 102
 
     self.ui_refresh()
 
     return (gframe, be, ww, wh)
+  
+  def __button__(self, frame, sb, style, hovertext, command):
+    b= ttk.Button(frame, padding=(0,0,0,0), command=command, style=style)
+    b.bind("<Enter>", lambda e: sb.set_label(hovertext))
+    b.bind("<Leave>", lambda e: sb.clear_label())
+    return b
   
   def ui_refresh(self):
 
@@ -248,12 +285,12 @@ class Routine(object):
         self.ui.label_done.set("day completed!")
         self.ui.btn_increment.state(['disabled'])
         self.ui.btn_unlock.state(["!disabled"])
-        self.ui.btn_unlock.place(relx=0, width=50)
+        self.ui.btn_unlock.place(relx=0)
       else:
         self.ui.label_done.set("")
         self.ui.btn_increment.state(['!disabled'])
         self.ui.btn_unlock.state(["disabled"])
-        self.ui.btn_unlock.place(relx=-1.0, width=0)
+        self.ui.btn_unlock.place(relx=-1.0)
 
       for e in self.ui.table.entries:
         e.set_enabled(not lock and d.sets < int(e.sets.cget("text")))
